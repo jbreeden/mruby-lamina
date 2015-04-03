@@ -32,5 +32,5 @@ def doc_end(filename)
 end
 
 def files
-  ["./src/mruby_cef_v8.cpp"]
+  ["./mrblib/lamina.rb"]
 end
