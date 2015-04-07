@@ -1,5 +1,7 @@
 /* System Includes */
+#if defined(_WIN32) || defined(_WIN64)
 #include <ws2tcpip.h>
+#endif
 #include <string>
 #include <thread>
 #include <chrono>
@@ -9,8 +11,9 @@
 #include "include/cef_app.h"
 #include "include/cef_browser.h"
 #include "include/cef_command_line.h"
-#include "include/cef_sandbox_win.h"
-
+#if defined(_WIN32) || defined(_WIN64)
+  #include "include/cef_sandbox_win.h"
+#endif
 /* APR Includes */
 #include "apr_file_io.h"
 #include "apr_thread_proc.h"
@@ -81,6 +84,9 @@ void set_mrb_for_thread(mrb_state* mrb) {
    mrbs_mutex.unlock();
 }
 
+int global_argc = 0;
+char** global_argv = NULL;
+
 mrb_value
 lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #ifdef DEBUG
@@ -97,7 +103,7 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #endif
 
    // Provide CEF with command-line arguments.
-   CefMainArgs main_args;
+   CefMainArgs main_args(global_argc, global_argv);
    // SimpleApp implements application-level callbacks. It will create the first
    // browser instance in OnContextInitialized() after CEF has initialized.
    CefRefPtr<LaminaApp> app(new LaminaApp);
@@ -122,6 +128,8 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
       // The sub-process has completed so return here.
       return mrb_nil_value();
    }
+   
+   LAMINA_LOG("This is a CEF browser process");
 
    // Specify CEF global settings here.
    CefSettings settings;
@@ -174,7 +182,7 @@ lamina_open_new_window(mrb_state* mrb, mrb_value self) {
    LAMINA_LOG("Starting browser message client");
    BrowserMessageClient client;
    auto browser_ipc_path = lamina_opt_browser_ipc_path();
-   LAMINA_LOG(string("Sending new_window to ") + browser_ipc_path);
+   LAMINA_LOG("Sending new_window message");
    client.set_server_url(browser_ipc_path);
    client.send("new_window");
    // Sleep long enough for the message to be delivered

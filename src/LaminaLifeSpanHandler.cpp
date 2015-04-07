@@ -3,7 +3,9 @@
 #include "lamina_opt.h"
 #include <vector>
 #include <regex>
-#include "Windows.h"
+#if defined(_WIN32) || defined(_WIN64)
+  #include "Windows.h"
+#endif
 #include "include/cef_app.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/base/cef_bind.h"
@@ -40,15 +42,15 @@ LaminaLifeSpanHandler::GetInstance() {
 void
 LaminaLifeSpanHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
    CEF_REQUIRE_UI_THREAD();
-
+   
+   // Add to the list of existing browsers.
+   browser_list_.push_back(browser);
+   
+#if defined(_WIN32) || defined(_WIN64)
    // Set the frame window title bar
    CefWindowHandle hwnd = browser->GetHost()->GetWindowHandle();
    SetWindowTextA(hwnd, lamina_opt_window_title().c_str());
 
-   // Add to the list of existing browsers.
-   browser_list_.push_back(browser);
-
-#ifdef _WIN32
    /*const HICON hicon = ::LoadIcon(
       ::GetModuleHandle(0),
       MAKEINTRESOURCE(IDI_LAMINA)

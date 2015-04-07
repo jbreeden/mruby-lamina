@@ -6,7 +6,9 @@
 #include <iostream>
 #include <sstream>
 #include <list>
+#if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
+#endif
 #include "include/cef_client.h"
 #include "include/wrapper/cef_helpers.h"
 #include "mruby_lamina.h"
@@ -39,12 +41,14 @@ public:
 
    // CefDisplayHandler methods:
    virtual void OnTitleChange(CefRefPtr<CefBrowser> browser, const CefString& title) OVERRIDE {
+      #if defined(_WIN32) || defined(_WIN64)
       if (lamina_opt_use_page_titles()) {
          CEF_REQUIRE_UI_THREAD();
          // Set the frame window title bar
          CefWindowHandle hwnd = browser->GetHost()->GetWindowHandle();
          SetWindowTextW(hwnd, title.c_str());
       }
+      #endif
    }
 
 private:

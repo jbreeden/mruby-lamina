@@ -119,6 +119,7 @@ module Lamina
 
   def self.ensure_lock_file_exists
     unless File.exists?(@lock_file_path)
+      puts "Creating lock file"
       # Don't set @lock_file variable until opened for reading (when we get the lock)
       File.open(@lock_file_path, 'w') do |lock_file|
         lock_file.puts "LAMINA LOCK FILE"
@@ -127,16 +128,21 @@ module Lamina
   end
 
   def self.determine_launch_mode
-    # Not closing this file because the shared lock
-    # should be maintained as long as this app is running
-    puts "Opening lock file"
-    @lock_file = File.open(@lock_file_path, 'r')
-    if @lock_file.flock(File::LOCK_EX | File::LOCK_NB)
-      puts "Got exclusive lock on lock file. App is being launched by user"
-      :launching
-    elsif  ENV['CEF_SUBPROC']
+    puts "Determining launch mode"
+    
+    # - Not closing this file because the shared lock
+    # should be maintained as long as this app is running.
+    # - On linux, file must be open for writing to get an exclusive lock,
+    # so opening with 'a' mode
+    @lock_file = File.open(@lock_file_path, 'a')
+    # Child processes may get redundant exclusive locks due to file descriptors being shared.
+    # So, check if this is a subprocess first. (TODO: Double check this)
+    if ENV['CEF_SUBPROC']
       puts "CEF_SUBPROC environment variable was found. This is a CEF sub process"
       :cef_process
+    elsif @lock_file.flock(File::LOCK_EX | File::LOCK_NB)
+      puts "Got exclusive lock on lock file. App is being launched by user"
+      :launching
     else
       puts "App is being relaunched by user"
       :relaunching
@@ -159,7 +165,6 @@ module Lamina
 
   def self.launch
     puts "Switching to shared lock"
-    @lock_file.flock(File::LOCK_UN)
     @lock_file.flock(File::LOCK_SH)
 
     if @on_launch_proc

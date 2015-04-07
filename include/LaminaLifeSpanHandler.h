@@ -2,7 +2,7 @@
 #define LAMINA_LIFE_SPAN_HANDLER_H
 
 #include <list>
-#include "include\cef_life_span_handler.h"
+#include "include/cef_life_span_handler.h"
 
 typedef std::list<CefRefPtr<CefBrowser> > BrowserList;
 
