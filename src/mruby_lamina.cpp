@@ -109,8 +109,10 @@ void set_mrb_for_thread(mrb_state* mrb) {
    mrbs_mutex.unlock();
 }
 
+#ifndef WINDOWS
 int global_argc = 0;
 char** global_argv = NULL;
+#endif
 
 mrb_value
 lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
@@ -128,7 +130,11 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #endif
 
    // Provide CEF with command-line arguments.
+#ifdef WINDOWS
+   CefMainArgs main_args;
+#else
    CefMainArgs main_args(global_argc, global_argv);
+#endif
    // SimpleApp implements application-level callbacks. It will create the first
    // browser instance in OnContextInitialized() after CEF has initialized.
    CefRefPtr<LaminaApp> app(new LaminaApp);

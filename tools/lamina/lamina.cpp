@@ -8,8 +8,10 @@ extern char** global_argv;
 
 int main(int argc, char** argv)
 {
+#ifndef WINDOWS
    global_argc = argc;
    global_argv = argv;
+#endif
 
    mrb_state* mrb = mrb_open();
    set_mrb_for_thread(mrb);

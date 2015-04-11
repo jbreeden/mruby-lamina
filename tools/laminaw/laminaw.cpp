@@ -11,13 +11,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
    LPSTR    lpCmdLine,
    int       nCmdShow)
 {
-   char msg[20];
-   sprintf(msg, "Argc: %d", __argc);
-   LAMINA_LOG(msg);
-
    app_handle = hInstance;
 
-   auto mrb = mrb_open();
+   mrb_state* mrb = mrb_open();
    set_mrb_for_thread(mrb);
 
    FILE* startup_script = fopen("lamina_main.rb", "r");
