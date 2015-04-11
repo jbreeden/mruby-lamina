@@ -13,6 +13,8 @@ MRuby::Gem::Specification.new('mruby-lamina') do |spec|
   if ENV['OS'] =~ /windows/i
     spec.bins = %w(lamina laminaw)
   else
+    spec.linker.flags << '-Wl,-rpath,/opt/lamina/lib'
+    spec.linker.libraries << 'X11'
     spec.bins = %w(lamina)
   end
   

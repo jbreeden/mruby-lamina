@@ -134,6 +134,7 @@ module Lamina
     # should be maintained as long as this app is running.
     # - On linux, file must be open for writing to get an exclusive lock,
     # so opening with 'a' mode
+    puts "Browser grabbing opening lock file: #{File.expand_path @lock_file_path}"
     @lock_file = File.open(@lock_file_path, 'a')
     # Child processes may get redundant exclusive locks due to file descriptors being shared.
     # So, check if this is a subprocess first. (TODO: Double check this)
@@ -164,8 +165,8 @@ module Lamina
   end
 
   def self.launch
-    puts "Switching to shared lock"
-    @lock_file.flock(File::LOCK_SH)
+    #puts "Switching to shared lock"
+    #@lock_file.flock(File::LOCK_SH)
 
     if @on_launch_proc
       puts "Running on_launch callback"

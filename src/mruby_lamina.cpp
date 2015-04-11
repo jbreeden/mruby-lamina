@@ -1,6 +1,8 @@
 /* System Includes */
 #if defined(_WIN32) || defined(_WIN64)
-#include <ws2tcpip.h>
+  #include <ws2tcpip.h>
+#else
+  #include <X11/Xlib.h>
 #endif
 #include <string>
 #include <thread>
@@ -51,6 +53,29 @@ using namespace std;
 //#ifdef _WIN32
 //#define CEF_USE_SANDBOX
 //#endif
+
+
+
+#if !defined(_WIN32) && !defined(_WIN64)
+namespace {
+
+int XErrorHandlerImpl(Display *display, XErrorEvent *event) {
+  LOG(WARNING)
+        << "X error received: "
+        << "type " << event->type << ", "
+        << "serial " << event->serial << ", "
+        << "error_code " << static_cast<int>(event->error_code) << ", "
+        << "request_code " << static_cast<int>(event->request_code) << ", "
+        << "minor_code " << static_cast<int>(event->minor_code);
+  return 0;
+}
+
+int XIOErrorHandlerImpl(Display *display) {
+  return 0;
+}
+
+}
+#endif
 
 std::mutex mrbs_mutex;
 map<thread::id, mrb_state*> thread_mrbs;
@@ -151,6 +176,13 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 
 #if !defined(CEF_USE_SANDBOX)
    settings.no_sandbox = true;
+#endif
+
+#if !defined(_WIN32) && !defined(_WIN64)
+  // Install xlib error handlers so that the application won't be terminated
+  // on non-fatal errors.
+  XSetErrorHandler(XErrorHandlerImpl);
+  XSetIOErrorHandler(XIOErrorHandlerImpl);
 #endif
 
    // Initialize CEF.
