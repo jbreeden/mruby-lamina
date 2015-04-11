@@ -88,21 +88,29 @@ module Lamina
   end
 
   # Configurable options
-  @browser_ipc_path = "ipc://#{(1..20).map { |i| ('a'.ord + rand(25)).chr }.join}/browser.ipc"
-  @cache_path = nil
-  @server_port = nil
-  @script_v8_extensions = "./lamina_v8_extensions.rb"
-  @remote_debugging_port = 0
-  @url = nil
-  @use_page_titles = false
-  @window_title = "Lamina"
+  def self.init_default_options
+    if /windows/i =~ ENV['OS']
+      ipc_prefix = ''
+    else
+      ipc_prefix = '/tmp/'
+    end
+    @browser_ipc_path = "ipc://#{ipc_prefix}#{(1..20).map { |i| ('a'.ord + rand(25)).chr }.join}_browser.ipc"
+    @cache_path = nil
+    @server_port = nil
+    @script_v8_extensions = "./lamina_v8_extensions.rb"
+    @remote_debugging_port = 0
+    @url = nil
+    @use_page_titles = false
+    @window_title = "Lamina"
 
-  # Internal-only variables
-  @lock_file_path = ".lamina"
-  @options_file_path = ".lamina_options"
-  @lock_file = nil
+    # Internal-only variables
+    @lock_file_path = ".lamina"
+    @options_file_path = ".lamina_options"
+    @lock_file = nil
+  end
 
   def self.run
+    init_default_options
     ensure_lock_file_exists
     launch_mode = determine_launch_mode
     case launch_mode
