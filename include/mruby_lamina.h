@@ -11,7 +11,13 @@
 extern "C" {
 #endif
 
-#define LAMINA_LOG(msg) printf("%s\n", msg);
+// Need a better logging solution... multiple threads/procs make this output ugly (err, useless?) at times
+#ifndef LAMINA_DISABLE_LOGGING
+#define LAMINA_LOG(msg) \
+   std::cout << msg << " @ " << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+#else
+   ;
+#endif
 
 mrb_state* mrb_for_thread();
 void set_mrb_for_thread(mrb_state* mrb);

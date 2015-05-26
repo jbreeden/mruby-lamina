@@ -81,16 +81,16 @@ std::mutex mrbs_mutex;
 map<thread::id, mrb_state*> thread_mrbs;
 
 mrb_state* mrb_for_thread() {
-   LAMINA_LOG("mrb_for_thread");
-   mrbs_mutex.lock();
    thread::id thread_id = this_thread::get_id();
+   LAMINA_LOG("mrb_for_thread: Fetching mruby instance for thread (id = " << thread_id << ')');
+   mrbs_mutex.lock();
    mrb_state* mrb;
    try {
       mrb = thread_mrbs.at(thread_id);
-      LAMINA_LOG("Found existing mrb for this thread");
+      LAMINA_LOG("mrb_for_thread: Found existing mrb for this thread");
    }
    catch (out_of_range ex) {
-      LAMINA_LOG("No mrb found for this thread, creating a new one.");
+      LAMINA_LOG("mrb_for_thread: No mrb found for this thread, creating a new one.");
       mrb = mrb_open();
       thread_mrbs[thread_id] = mrb;
    }
@@ -102,9 +102,9 @@ mrb_state* mrb_for_thread() {
 // (Since it is launched as lamina.exe, and an mrb_state will already
 //  be available)
 void set_mrb_for_thread(mrb_state* mrb) {
-   LAMINA_LOG("set_mrb_for_thread");
-   mrbs_mutex.lock();
    thread::id thread_id = this_thread::get_id();
+   LAMINA_LOG("set_mrb_for_thread: Explicitly setting mruby instance for thread (id = " << thread_id << ')');
+   mrbs_mutex.lock();
    thread_mrbs[thread_id] = mrb;
    mrbs_mutex.unlock();
 }
@@ -148,19 +148,19 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
    // CEF applications have multiple sub-processes (render, plugin, GPU, etc)
    // that share the same executable. This function checks the command-line and,
    // if this is a sub-process, executes the appropriate logic.
-   LAMINA_LOG("Executing CEF Process");
+   LAMINA_LOG("Lamina.start: Executing CEF Process");
    apr_pool_t* pool;
    apr_pool_create(&pool, NULL);
    apr_env_set("CEF_SUBPROC", "true", pool);
    apr_pool_destroy(pool);
    int exit_code = CefExecuteProcess(main_args, app.get(), sandbox_info);
    if (exit_code >= 0) {
-      LAMINA_LOG("Subprocess exited");
+      LAMINA_LOG("Lamina.start: Subprocess exited");
       // The sub-process has completed so return here.
       return mrb_nil_value();
    }
    
-   LAMINA_LOG("This is a CEF browser process");
+   LAMINA_LOG("Lamina.start: This is a CEF browser process");
 
    // Specify CEF global settings here.
    CefSettings settings;
@@ -206,7 +206,7 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 
 mrb_value
 lamina_start_browser_message_server(mrb_state* mrb, mrb_value self) {
-   LAMINA_LOG("Starting browser message server");
+   LAMINA_LOG("Lamina.start_browser_message_server (c ext): Starting browser message server");
    // Create new, and do not destroy. Should be running as long as the process is running
    auto browserMessageServer = new BrowserMessageServer();
    browserMessageServer->set_url(lamina_opt_browser_ipc_path());
@@ -217,10 +217,10 @@ lamina_start_browser_message_server(mrb_state* mrb, mrb_value self) {
 // md-doc is already written in mrblib/lamina.rb (just to keep it all in one file)
 mrb_value
 lamina_open_new_window(mrb_state* mrb, mrb_value self) {
-   LAMINA_LOG("Starting browser message client");
+   LAMINA_LOG("Lamina.open_new_window (c ext): Starting browser message client");
    BrowserMessageClient client;
    auto browser_ipc_path = lamina_opt_browser_ipc_path();
-   LAMINA_LOG("Sending new_window message");
+   LAMINA_LOG("Lamina.open_new_window (c ext): Sending new_window message");
    client.set_server_url(browser_ipc_path);
    client.send("new_window");
    // Sleep long enough for the message to be delivered

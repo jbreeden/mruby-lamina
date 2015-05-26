@@ -9,8 +9,7 @@ using namespace std;
 
 void 
 BrowserMessageServer::set_url(std::string url) {
-   LAMINA_LOG("BrowserMessageServer: Setting browser message server url");
-   LAMINA_LOG(url.c_str());
+   LAMINA_LOG("BrowserMessageServer: Setting browser message server url = " << url);
    this->url = url;
    
 }
@@ -32,11 +31,10 @@ BrowserMessageServer::start() {
 
       while (true) {
          void* buf = NULL;
-         LAMINA_LOG("BrowserMessageServer: nn_recv");
+         LAMINA_LOG("BrowserMessageServer: Waiting for message");
          int nbytes = nn_recv(this->socket, &buf, NN_MSG, 0);
-         LAMINA_LOG("BrowserMessageServer: nn_recv returned");
+         LAMINA_LOG("BrowserMessageServer: Got " << nbytes << " byte message");
          if (nbytes > 0) {
-            LAMINA_LOG("BrowserMessageServer: Opening new browser window");
             LaminaLifeSpanHandler::GetInstance()->ExecuteJavaScript("window.open('/');", ".*", true);
          }
          nn_freemsg(buf);

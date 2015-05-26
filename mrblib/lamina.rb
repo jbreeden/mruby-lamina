@@ -50,15 +50,15 @@ module Lamina
     attr_accessor :server_port
 
     #<
-    # ## `attr_accessor :script_v8_extensions`
-    # - Get or set the `script_v8_extensions` option (must be a string)
-    # - This tells lamina what file to load when a new V8 context is created.
-    # - In this file, you can use the [`mruby-cef`](https://github.com/jbreeden/mruby-cef/blob/master/doc/src/mruby_cef_v8.md)
+    # ## `attr_accessor :v8_extensions`
+    # - Get or set the `v8_extensions` array (must be an array of file paths)
+    # - This tells lamina what files to load when a new V8 context is created.
+    # - In these file, you can use the [`mruby-cef`](https://github.com/jbreeden/mruby-cef/blob/master/doc/src/mruby_cef_v8.md)
     #   API to write javascript extension for use in your application. (See `javascript_interop` sample for examples).
-    # - If this file does not exist, no error will be reported. It is simply ignored.
-    # - Default value: `./lamina_v8_extensions.rb`
+    # - If any file does not exist, a message will be logged to stdout (unless logging is disabled).
+    # - Default value: Array with all file names ending in '.rb' from `/opt/lamina/js_extensions/` directory
     #>
-    attr_accessor :script_v8_extensions
+    attr_accessor :js_extensions
 
     #<
     # ## `attr_accessor :url`
@@ -97,7 +97,11 @@ module Lamina
     @browser_ipc_path = "ipc://#{ipc_prefix}#{(1..20).map { |i| ('a'.ord + rand(25)).chr }.join}_browser.ipc"
     @cache_path = nil
     @server_port = nil
-    @script_v8_extensions = "./lamina_v8_extensions.rb"
+    @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
+      f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
+    }.map { |f|
+      "/opt/lamina/js_extensions/#{f}"
+    }
     @remote_debugging_port = 0
     @url = nil
     @use_page_titles = false
@@ -127,7 +131,7 @@ module Lamina
 
   def self.ensure_lock_file_exists
     unless File.exists?(@lock_file_path)
-      puts "Creating lock file"
+      puts "Lamina.ensure_lock_file_exists: Creating lock file"
       # Don't set @lock_file variable until opened for reading (when we get the lock)
       File.open(@lock_file_path, 'w') do |lock_file|
         lock_file.puts "LAMINA LOCK FILE"
@@ -136,24 +140,24 @@ module Lamina
   end
 
   def self.determine_launch_mode
-    puts "Determining launch mode"
-    
+    puts "Lamina.determine_launch_mode: Determining launch mode"
+
     # - Not closing this file because the shared lock
     # should be maintained as long as this app is running.
     # - On linux, file must be open for writing to get an exclusive lock,
     # so opening with 'a' mode
-    puts "Browser grabbing opening lock file: #{File.expand_path @lock_file_path}"
+    puts "Lamina.determine_launch_mode: Opening lock file: #{File.expand_path @lock_file_path}"
     @lock_file = File.open(@lock_file_path, 'a')
     # Child processes may get redundant exclusive locks due to file descriptors being shared.
     # So, check if this is a subprocess first. (TODO: Double check this)
     if ENV['CEF_SUBPROC']
-      puts "CEF_SUBPROC environment variable was found. This is a CEF sub process"
+      puts "Lamina.determine_launch_mode: CEF_SUBPROC environment variable was found. This is a CEF sub process"
       :cef_process
     elsif @lock_file.flock(File::LOCK_EX | File::LOCK_NB)
-      puts "Got exclusive lock on lock file. App is being launched by user"
+      puts "Lamina.determine_launch_mode: Got exclusive lock on lock file. App is being launched by user"
       :launching
     else
-      puts "App is being relaunched by user"
+      puts "Lamina.determine_launch_mode: App is being relaunched by user"
       :relaunching
     end
   end
@@ -177,22 +181,22 @@ module Lamina
     #@lock_file.flock(File::LOCK_SH)
 
     if @on_launch_proc
-      puts "Running on_launch callback"
+      puts "Lamina.launch: Running on_launch callback"
       @on_launch_proc[]
-      puts "Writing options to #{@options_file_path}"
+      puts "Lamina.launch: Writing options to #{@options_file_path}"
       File.open(@options_file_path, 'w') do |opt_file|
         print_options(opt_file)
       end
-      puts "Validating options"
+      puts "Lamina.launch: Validating options"
       validate_options
     end
-    puts "Launching options:"
+    puts "Lamina.launch: Launching options:"
     print_options($stdout, '  ')
 
-    set_localhost_storage_file_port
-    puts "Starting browser message server"
+    update_cache
+    puts "Lamina.launch: Starting browser message server"
     start_browser_message_server
-    puts "Starting CEF"
+    puts "Lamina.launch: Starting CEF"
     start_cef_proc
   end
 
@@ -218,7 +222,7 @@ module Lamina
 
   def self.relaunch
     File.open(@options_file_path, 'r') do |f|
-      puts "Relaunching lamina with options:"
+      puts "Lamina.relaunch: Relaunching lamina with options:"
       print_options($stdout, '  ')
       @on_relaunch_block[] if @on_relaunch_block
     end
@@ -226,7 +230,7 @@ module Lamina
 
   def self.read_lamina_options
     File.open(@options_file_path, 'r') do |f|
-      puts "Reading options from #{@options_file_path}"
+      puts "Lamina.read_lamina_options: Reading options from #{@options_file_path}"
       eval f.read
     end
   end
@@ -236,7 +240,7 @@ module Lamina
     file.puts "#{indent}Lamina.cache_path = #{ @cache_path ? "'#{@cache_path}'" : 'nil' }"
     file.puts "#{indent}Lamina.remote_debugging_port = #{@remote_debugging_port || 'nil' }"
     file.puts "#{indent}Lamina.server_port = #{@server_port || 'nil' }"
-    file.puts "#{indent}Lamina.script_v8_extensions = #{ @script_v8_extensions ? "'#{@script_v8_extensions}'" : 'nil' }"
+    file.puts "#{indent}Lamina.js_extensions = #{ @js_extensions ? "#{@js_extensions}" : 'nil' }"
     file.puts "#{indent}Lamina.url = #{ @url ? "'#{@url}'" : 'nil' }"
     file.puts "#{indent}Lamina.use_page_titles = #{@use_page_titles || 'false' }"
     file.puts "#{indent}Lamina.window_title = #{ @window_title ? "'#{@window_title}'" : 'nil' }"
@@ -244,7 +248,7 @@ module Lamina
 
   def self.validate_options
     unless @browser_ipc_path =~ %r[(ipc|tcp)://.*]
-      puts "Erro: Lamina.url must be a string matching %r[(ipc|tcp)://.*]"
+      puts "!!! ERROR !!! Lamina.url must be a string matching %r[(ipc|tcp)://.*]"
       exit 1
     end
 
@@ -252,32 +256,31 @@ module Lamina
       begin
         Dir.mkdir @cache_path
       rescue Exception => ex
-        puts "Erro: Lamina.cache_path (#{@cache_path}), directory does not exist and could not be created."
+        puts "!!! ERROR !!! Lamina.cache_path (#{@cache_path}), directory does not exist and could not be created."
         puts ex
         exit 1
       end
     end
 
     unless @server_port.nil? || @server_port.kind_of?(Fixnum)
-      puts "Erro: If Lamina.cache_path is supplied, it must be an int"
+      puts "!!! ERROR !!! If Lamina.cache_path is supplied, it must be an int"
       exit 1
     end
 
-    # If the default is left, but the file doesn't exist, lamina will just
-    # skip loading it. If the client has specified a different value, we
-    # should probably warn them if the file doesn't exist
-    unless @script_v8_extensions == "./lamina_v8_extensions.rb" || File.exists?(@script_v8_extensions)
-      puts "Erro: Lamina.script_v8_extensions was specifed as #{@script_v8_extensions} but this file does not exist"
-      exit 1
+    @js_extensions.each do |f|
+      unless File.exists? f
+        puts "!!! ERROR !!! Lamina.js_extensions entry #{f} does not exist"
+        exit 1
+      end
     end
 
     unless @remote_debugging_port.nil? || @remote_debugging_port.kind_of?(Fixnum)
-      puts "Erro: If Lamina.remoute_debugging_port is specified, it must be an int"
+      puts "!!! ERROR !!! If Lamina.remoute_debugging_port is specified, it must be an int"
       exit 1
     end
 
     unless @url =~ %r[(https?|file)://.*]
-      puts "Erro: Lamina.url must be a string matching %r[(https?|file)://.*]"
+      puts "!!! ERROR !!! Lamina.url must be a string matching %r[(https?|file)://.*]"
       exit 1
     end
 
@@ -285,7 +288,8 @@ module Lamina
     # or false it will evaluate as true... no biggy, so no validation
 
     unless @window_title.nil? || @window_title.kind_of?(String)
-      puts "Erro: If Lamina.window_title is specified, it must be a string"
+      puts "!!! ERROR !!! If Lamina.window_title is specified, it must be a string"
+      exit 1
     end
   end
 
@@ -295,21 +299,41 @@ module Lamina
   # the localstorage files will not be found by CEF so localstorage
   # will not work. Renaming the files by the current port in use
   # solves this.
-  def self.set_localhost_storage_file_port
+  def self.update_cache
     return if @cache_path.nil? || @server_port.nil?
 
-    puts "Updating localstorage files"
+    puts "Lamina.update_cache: Updating cache files"
+
+    if Dir.exists? @cache_path
+      Dir.chdir(@cache_path) do
+        Dir.entries('.').each do |f|
+          File.delete(f) if File.file?(f) && !(f =~ /^Cookies/)
+        end
+      end
+    end
 
     if Dir.exists? "#{@cache_path}/Local Storage"
       Dir.chdir("#{@cache_path}/Local Storage") do
         Dir.entries('.').each do |f|
           if m = f.match(/^http_localhost_([0-9]*).localstorage/i)
-            puts "Renaming #{f} to #{f.sub(/localhost_([0-9]*)/, @server_port.to_s)}"
+            puts "Lamina.update_cache: Renaming #{f} to #{f.sub(/localhost_([0-9]*)/, @server_port.to_s)}"
             File.rename f, f.sub(/localhost_([0-9]*)/, "localhost_#{@server_port}")
           end
         end
       end
     end
+
+    if Dir.exists? "#{@cache_path}/IndexedDB"
+      Dir.chdir("#{@cache_path}/IndexedDB") do
+        Dir.entries('.').each do |f|
+          if m = f.match(/^http_localhost_([0-9]*).localstorage/i)
+            puts "Lamina.update_cache: Renaming #{f} to #{f.sub(/localhost_([0-9]*)/, @server_port.to_s)}"
+            File.rename f, f.sub(/localhost_([0-9]*)/, "localhost_#{@server_port}")
+          end
+        end
+      end
+    end
+
   end
 
 end
