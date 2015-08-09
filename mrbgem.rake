@@ -40,13 +40,13 @@ MRuby::Gem::Specification.new('mruby-lamina') do |spec|
   spec.cxx.flags << [ '-std=c++11' ]
 
   if OS.mac?
-    spec.cc.include_paths << "/Users/jared/projects/cef-build/cef_binary_3.2171.1979_macosx64"
-    spec.cxx.include_paths << "/Users/jared/projects/cef-build/cef_binary_3.2171.1979_macosx64"
+    spec.cc.include_paths << ENV['CEF_HOME']
+    spec.cxx.include_paths << ENV['CEF_HOME']
     spec.cc.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
     spec.cxx.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
-    spec.linker.flags << "-F/Users/jared/projects/cef-build/cef_binary_3.2171.1979_macosx64/Release"
+    spec.linker.flags << "-F#{ENV['CEF_HOME']}/Release"
     spec.linker.flags << "-framework \"Chromium Embedded Framework\""
-    (spec.linker.flags_after_libraries = []) << '/Users/jared/projects/cef-build/cef_binary_3.2171.1979_macosx64_build/libcef_dll/Release/libcef_dll_wrapper.a'
+    (spec.linker.flags_after_libraries = []) << "#{ENV['CEF_HOME']}/build/libcef_dll/Release/libcef_dll_wrapper.a"
   elsif OS.linux?
     spec.linker.flags << '-Wl,-rpath,/opt/lamina/lib'
     spec.linker.libraries << 'X11'
