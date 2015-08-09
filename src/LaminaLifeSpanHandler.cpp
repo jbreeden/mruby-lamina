@@ -2,7 +2,7 @@
 #include "LaminaLifeSpanHandler.h"
 #include "lamina_opt.h"
 #include <vector>
-#include <regex>
+/*#include <regex>*/
 #if defined(_WIN32) || defined(_WIN64)
   #include "Windows.h"
 #endif
@@ -42,10 +42,10 @@ LaminaLifeSpanHandler::GetInstance() {
 void
 LaminaLifeSpanHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
    CEF_REQUIRE_UI_THREAD();
-   
+
    // Add to the list of existing browsers.
    browser_list_.push_back(browser);
-   
+
 #if defined(_WIN32) || defined(_WIN64)
    // Set the frame window title bar
    CefWindowHandle hwnd = browser->GetHost()->GetWindowHandle();
@@ -115,14 +115,16 @@ LaminaLifeSpanHandler::CloseAllBrowsers(bool force_close) {
 
 void LaminaLifeSpanHandler::ExecuteJavaScript(char* script, char* window_pattern, bool firstMatch) {
    auto browsers = browser_list_;
-   regex regexp(window_pattern);
+   //regex regexp(window_pattern);
    for (auto browserPtr = browsers.begin(); browserPtr != browsers.end(); ++browserPtr) {
       auto browser = *browserPtr;
       vector<CefString> frameNames;
       browser->GetFrameNames(frameNames);
       for (auto frameNamePtr = frameNames.begin(); frameNamePtr != frameNames.end(); ++frameNamePtr){
          auto name = *frameNamePtr;
-         if (regex_match(name.ToString(), regexp)) {
+         // TODO: Changed for build on mac
+         //if (regex_match(name.ToString(), regexp)) {
+         if (strcmp(name.ToString().c_str(), window_pattern)) {
             auto frame = browser->GetFrame(name);
             frame->ExecuteJavaScript(script, frame->GetURL(), 0);
             if (firstMatch) {

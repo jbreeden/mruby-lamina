@@ -8,6 +8,7 @@
 #include "mruby_lamina.h"
 #include "lamina_opt.h"
 #include <cstdio>
+#include <iostream>
 
 using namespace std;
 

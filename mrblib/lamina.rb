@@ -146,7 +146,7 @@ module Lamina
     # should be maintained as long as this app is running.
     # - On linux, file must be open for writing to get an exclusive lock,
     # so opening with 'a' mode
-    puts "Lamina.determine_launch_mode: Opening lock file: #{File.expand_path @lock_file_path}"
+    puts "Lamina.determine_launch_mode: Opening lock file: #{@lock_file_path}"
     @lock_file = File.open(@lock_file_path, 'a')
     # Child processes may get redundant exclusive locks due to file descriptors being shared.
     # So, check if this is a subprocess first. (TODO: Double check this)
@@ -229,6 +229,7 @@ module Lamina
   end
 
   def self.read_lamina_options
+    puts "Reading options from #{@opetions_file_path}"
     File.open(@options_file_path, 'r') do |f|
       puts "Lamina.read_lamina_options: Reading options from #{@options_file_path}"
       eval f.read

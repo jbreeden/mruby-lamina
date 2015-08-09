@@ -37,7 +37,7 @@ void LaminaRenderProcessHandler::OnContextCreated(CefRefPtr<CefBrowser> browser,
          if (mrb->exc) {
             LAMINA_LOG("LaminaRenderProcessHandler: Error loading ruby extesion. "
                << mrb_str_to_cstr(
-                     mrb, 
+                     mrb,
                      mrb_funcall(mrb, mrb_obj_value(mrb->exc), "to_s", 0)
                   )
             );
@@ -66,12 +66,16 @@ void LaminaRenderProcessHandler::OnContextCreated(CefRefPtr<CefBrowser> browser,
          context->Eval(buffer, ret, exc);
 
          if (exc.get() != NULL) {
-            LAMINA_LOG("LaminaRenderProcessHandler: Error on line " 
-               << exc->GetLineNumber() 
-               << " of file " 
-               << script_file_name 
-               << ". " 
+            LAMINA_LOG("LaminaRenderProcessHandler: Error on line "
+               << exc->GetLineNumber()
+               << " of file "
+               << script_file_name
+               << ". "
+#if defined(_WIN32)
                << exc->GetMessageA().ToString());
+#else
+               << exc->GetMessage().ToString());
+#endif
          }
       }
 

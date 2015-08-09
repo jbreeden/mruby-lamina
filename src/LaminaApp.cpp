@@ -13,6 +13,7 @@ CefRefPtr<CefRenderProcessHandler> LaminaApp::GetRenderProcessHandler(){
 }
 
 void LaminaApp::OnContextInitialized() {
+  cout << "Browser Context Created!" << std::endl;
 
    // Information used when creating the native window.
    CefWindowInfo window_info;
@@ -30,5 +31,6 @@ void LaminaApp::OnContextInitialized() {
    CefBrowserSettings browser_settings;
 
    // Create the first browser window.
+   cout << "Opening URL: " << this->url << std::endl;
    CefBrowserHost::CreateBrowser(window_info, handler.get(), this->url, browser_settings, NULL);
 }

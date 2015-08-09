@@ -1,13 +1,11 @@
 /* System Includes */
 #if defined(_WIN32) || defined(_WIN64)
   #include <ws2tcpip.h>
-#else
+#elif !defined(__APPLE__)
   #include <X11/Xlib.h>
 #endif
 #include <string>
-#include <thread>
-#include <chrono>
-#include <mutex>
+#include <stdexcept>
 
 /* CEF Includes */
 #include "include/cef_app.h"
@@ -16,14 +14,18 @@
 #if defined(_WIN32) || defined(_WIN64)
   #include "include/cef_sandbox_win.h"
 #endif
+
 /* APR Includes */
 #include "apr_file_io.h"
+#include "apr_portable.h"
 #include "apr_thread_proc.h"
+#include "apr_thread_mutex.h"
 #include "apr_network_io.h"
 #include "apr_env.h"
 
 /* MRuby Includes */
 #include "mruby.h"
+#include "mruby/string.h"
 #include "mruby/compile.h"
 
 /* Lamina Includes */
@@ -32,8 +34,8 @@
 #include "LaminaHandler.h"
 #include "LaminaApp.h"
 #include "lamina_opt.h"
-#include "BrowserMessageServer.h"
-#include "BrowserMessageClient.h"
+// #include "BrowserMessageServer.h"
+// #include "BrowserMessageClient.h"
 
 using namespace std;
 
@@ -54,9 +56,11 @@ using namespace std;
 //#define CEF_USE_SANDBOX
 //#endif
 
+/******************************************************************
+ * XError Handlers (so app doesn't crash for no *good* reason)
+ ******************************************************************/
 
-
-#if !defined(_WIN32) && !defined(_WIN64)
+#if !defined(_WIN32) && !defined(__APPLE__)
 namespace {
 
 int XErrorHandlerImpl(Display *display, XErrorEvent *event) {
@@ -77,24 +81,48 @@ int XIOErrorHandlerImpl(Display *display) {
 }
 #endif
 
-std::mutex mrbs_mutex;
-map<thread::id, mrb_state*> thread_mrbs;
+/*********************************
+ * MRB Thread Instance Management
+ *********************************/
+
+struct AprOsThreadComparator {
+    bool operator()(const apr_os_thread_t& a, const apr_os_thread_t& b) const {
+        return apr_os_thread_equal(a, b);
+    }
+};
+
+static apr_thread_mutex_t* mrbs_mutex = NULL;
+std::map<apr_os_thread_t, mrb_state*, AprOsThreadComparator> thread_mrbs;
 
 mrb_state* mrb_for_thread() {
-   thread::id thread_id = this_thread::get_id();
-   LAMINA_LOG("mrb_for_thread: Fetching mruby instance for thread (id = " << thread_id << ')');
-   mrbs_mutex.lock();
+   if (mrbs_mutex == NULL) {
+     apr_pool_t* mutex_pool;
+     apr_pool_create(&mutex_pool, NULL);
+     apr_thread_mutex_create(&mrbs_mutex, APR_THREAD_MUTEX_DEFAULT, mutex_pool);
+   }
+
+   apr_os_thread_t os_thread = apr_os_thread_current();
+   LAMINA_LOG("mrb_for_thread: Fetching mruby instance for thread.");
+   apr_thread_mutex_lock(mrbs_mutex);
    mrb_state* mrb;
    try {
-      mrb = thread_mrbs.at(thread_id);
+      mrb = thread_mrbs.at(os_thread);
       LAMINA_LOG("mrb_for_thread: Found existing mrb for this thread");
    }
    catch (out_of_range ex) {
       LAMINA_LOG("mrb_for_thread: No mrb found for this thread, creating a new one.");
       mrb = mrb_open();
-      thread_mrbs[thread_id] = mrb;
+      RClass* lamina_module = mrb_define_module(mrb, "Lamina");
+      mrb_funcall(mrb, mrb_obj_value(lamina_module), "init_default_options", 0);
+      mrb_funcall(mrb, mrb_obj_value(lamina_module), "read_lamina_options", 0);
+      if (mrb->exc)
+      {
+          printf( "EXCEPTION READING LAMINA OPTIONS! \n" );
+          printf("%s\n", mrb_str_to_cstr(mrb, mrb_obj_value(mrb->exc)));
+      }
+      thread_mrbs[os_thread] = mrb;
    }
-   mrbs_mutex.unlock();
+   apr_thread_mutex_unlock(mrbs_mutex);
    return mrb;
 }
 
@@ -102,17 +130,24 @@ mrb_state* mrb_for_thread() {
 // (Since it is launched as lamina.exe, and an mrb_state will already
 //  be available)
 void set_mrb_for_thread(mrb_state* mrb) {
-   thread::id thread_id = this_thread::get_id();
-   LAMINA_LOG("set_mrb_for_thread: Explicitly setting mruby instance for thread (id = " << thread_id << ')');
-   mrbs_mutex.lock();
-   thread_mrbs[thread_id] = mrb;
-   mrbs_mutex.unlock();
+   if (mrbs_mutex == NULL) {
+     apr_pool_t* mutex_pool;
+     apr_pool_create(&mutex_pool, NULL);
+     apr_thread_mutex_create(&mrbs_mutex, APR_THREAD_MUTEX_DEFAULT, mutex_pool);
+   }
+   apr_thread_mutex_lock(mrbs_mutex);
+   apr_os_thread_t os_thread = apr_os_thread_current();
+   LAMINA_LOG("set_mrb_for_thread: Explicitly setting mruby instance for thread");
+   thread_mrbs[os_thread] = mrb;
+   apr_thread_mutex_unlock(mrbs_mutex);
 }
 
-#ifndef WINDOWS
+/*********************************
+ * Lamina Ruby Module Functions
+ *********************************/
+
 int global_argc = 0;
 char** global_argv = NULL;
-#endif
 
 mrb_value
 lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
@@ -141,9 +176,7 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 
    app.get()->url = lamina_opt_app_url();
 
-#ifdef DEBUG
    cout << "APP URL: " << app.get()->url << endl;
-#endif
 
    // CEF applications have multiple sub-processes (render, plugin, GPU, etc)
    // that share the same executable. This function checks the command-line and,
@@ -159,7 +192,7 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
       // The sub-process has completed so return here.
       return mrb_nil_value();
    }
-   
+
    LAMINA_LOG("Lamina.start: This is a CEF browser process");
 
    // Specify CEF global settings here.
@@ -178,13 +211,13 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
    if (rdp != 0) {
       settings.remote_debugging_port = rdp;
    }
-      
+
 
 #if !defined(CEF_USE_SANDBOX)
    settings.no_sandbox = true;
 #endif
 
-#if !defined(_WIN32) && !defined(_WIN64)
+#if !defined(_WIN32) && !defined(__APPLE__)
   // Install xlib error handlers so that the application won't be terminated
   // on non-fatal errors.
   XSetErrorHandler(XErrorHandlerImpl);
@@ -208,25 +241,25 @@ mrb_value
 lamina_start_browser_message_server(mrb_state* mrb, mrb_value self) {
    LAMINA_LOG("Lamina.start_browser_message_server (c ext): Starting browser message server");
    // Create new, and do not destroy. Should be running as long as the process is running
-   auto browserMessageServer = new BrowserMessageServer();
-   browserMessageServer->set_url(lamina_opt_browser_ipc_path());
-   browserMessageServer->start();
+  //  auto browserMessageServer = new BrowserMessageServer();
+  //  browserMessageServer->set_url(lamina_opt_browser_ipc_path());
+  //  browserMessageServer->start();
    return self;
 }
 
 // md-doc is already written in mrblib/lamina.rb (just to keep it all in one file)
 mrb_value
 lamina_open_new_window(mrb_state* mrb, mrb_value self) {
-   LAMINA_LOG("Lamina.open_new_window (c ext): Starting browser message client");
-   BrowserMessageClient client;
-   auto browser_ipc_path = lamina_opt_browser_ipc_path();
-   LAMINA_LOG("Lamina.open_new_window (c ext): Sending new_window message");
-   client.set_server_url(browser_ipc_path);
-   client.send("new_window");
-   // Sleep long enough for the message to be delivered
-   // just in case the app exists after this.
-   // (TODO: Should be a way to flush this without a sleep)
-   this_thread::sleep_for(chrono::seconds(1));
+  //  LAMINA_LOG("Lamina.open_new_window (c ext): Starting browser message client");
+  //  BrowserMessageClient client;
+  //  auto browser_ipc_path = lamina_opt_browser_ipc_path();
+  //  LAMINA_LOG("Lamina.open_new_window (c ext): Sending new_window message");
+  //  client.set_server_url(browser_ipc_path);
+  //  client.send("new_window");
+  //  // Sleep long enough for the message to be delivered
+  //  // just in case the app exists after this.
+  //  // (TODO: Should be a way to flush this without a sleep)
+  //  this_thread::sleep_for(chrono::seconds(1));
    return self;
 }
 
@@ -238,6 +271,30 @@ void mrb_mruby_lamina_gem_init(mrb_state* mrb) {
 }
 
 void mrb_mruby_lamina_gem_final(mrb_state* mrb) {}
+
+/*********************************
+ * Platform agnostic start routine
+ *********************************/
+int lamina_main()
+{
+   mrb_state* mrb = mrb_open();
+   set_mrb_for_thread(mrb);
+
+   mrbc_context* context = mrbc_context_new(mrb);
+   context->filename = "lamina_main.rb";
+
+   FILE* startup_script = fopen("lamina_main.rb", "r");
+   if (startup_script != NULL) {
+      mrb_load_file_cxt(mrb, startup_script, context);
+      if (mrb->exc) {
+         LAMINA_LOG("!!! Error !!! " << mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_obj_value(mrb->exc), "to_s", 0)));
+      }
+      return 0;
+   }
+   else {
+      return 1;
+   }
+}
 
 #ifdef __cplusplus
 }

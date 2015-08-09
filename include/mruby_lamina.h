@@ -24,6 +24,7 @@ void set_mrb_for_thread(mrb_state* mrb);
 mrb_value lamina_start(mrb_state* mrb, mrb_value self);
 void mrb_mruby_lamina_gem_init(mrb_state* mrb);
 void mrb_mruby_lamina_gem_final(mrb_state* mrb);
+int lamina_main();
 
 #ifdef __cplusplus
 }
