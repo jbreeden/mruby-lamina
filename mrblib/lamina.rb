@@ -66,9 +66,11 @@ module Lamina
 
   def self.main
     if File.exists?("./lamina_main.rb")
+      $stdout.puts "Loading lamina_main.rb"
       load "./lamina_main.rb"
     elsif File.exists?("./index.html")
       # The default URL is ./index.html, so just run
+      $stdout.puts "Loading index.html"
       self.run
     else
       $stderr.puts("ERROR: No lamina_main.rb or index.html files found. Exiting.")
@@ -101,11 +103,15 @@ module Lamina
     else
       @cache_path = nil
     end
-    @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
-      f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
-    }.map { |f|
-      "/opt/lamina/js_extensions/#{f}"
-    }
+    if Dir.exists?('/opt/lamina/js_extensions')
+      @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
+        f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
+      }.map { |f|
+        "/opt/lamina/js_extensions/#{f}"
+      }
+    else
+      @js_extensions = []
+    end
     @remote_debugging_port = 9999
     @url = "file://#{Dir.pwd}/index.html"
     @use_page_titles = false
