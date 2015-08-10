@@ -69,16 +69,17 @@ module Lamina
       $stdout.puts "Loading lamina_main.rb"
       load "./lamina_main.rb"
     elsif File.exists?("./index.html")
-      # The default URL is ./index.html, so just run
       $stdout.puts "Loading index.html"
+      self.url = "file://#{Dir.pwd}/index.html"
       self.run
     else
-      $stderr.puts("ERROR: No lamina_main.rb or index.html files found. Exiting.")
+      $stdout.puts "No lamina_main.rb or index.html found. Opening directory."
+      self.url = "file://#{Dir.pwd}"
+      self.run
     end
   end
 
   def self.run
-    init_default_options
     ensure_lock_file_exists
     launch_mode = determine_launch_mode
     case launch_mode
@@ -94,33 +95,6 @@ module Lamina
   rescue Exception => ex
     $stderr.puts "Exception: #{ex}"
     $stderr.puts "Backtrace: #{ex.backtrace}"
-  end
-
-  # Configurable options
-  def self.init_default_options
-    if Dir.exists?('./lamina_cache')
-      @cache_path = './lamina_cache'
-    else
-      @cache_path = nil
-    end
-    if Dir.exists?('/opt/lamina/js_extensions')
-      @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
-        f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
-      }.map { |f|
-        "/opt/lamina/js_extensions/#{f}"
-      }
-    else
-      @js_extensions = []
-    end
-    @remote_debugging_port = 9999
-    @url = "file://#{Dir.pwd}/index.html"
-    @use_page_titles = false
-    @window_title = "Lamina"
-
-    # Internal-only variables
-    @lock_file_path = ".lamina"
-    @options_file_path = ".lamina_options"
-    @lock_file = nil
   end
 
   def self.ensure_lock_file_exists
@@ -273,4 +247,30 @@ module Lamina
     end
   end
 
+  # Configure Defaults on load
+  # --------------------------
+
+  if Dir.exists?('./lamina_cache')
+    @cache_path = './lamina_cache'
+  else
+    @cache_path = nil
+  end
+  if Dir.exists?('/opt/lamina/js_extensions')
+    @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
+      f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
+    }.map { |f|
+      "/opt/lamina/js_extensions/#{f}"
+    }
+  else
+    @js_extensions = []
+  end
+  @remote_debugging_port = 9999
+  @url = "file://#{Dir.pwd}/index.html"
+  @use_page_titles = false
+  @window_title = "Lamina"
+
+  # Internal-only variables
+  @lock_file_path = ".lamina"
+  @options_file_path = ".lamina_options"
+  @lock_file = nil
 end

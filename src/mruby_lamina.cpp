@@ -118,7 +118,7 @@ public:
   }
 
   void set_mrb_for_thread(mrb_state* mrb) {
-    LAMINA_LOG("MrbThreadManager: Setting MRB for current thread");
+    // LAMINA_LOG("MrbThreadManager: Setting MRB for current thread");
     check_mutex();
     apr_thread_mutex_lock(MrbThreadManager::mutex);
     set_mrb_for_thread_no_lock(mrb);
@@ -126,7 +126,7 @@ public:
   }
 
   mrb_state* get_mrb_for_thread() {
-    LAMINA_LOG("MrbThreadManager: Getting MRB for current thread");
+    // LAMINA_LOG("MrbThreadManager: Getting MRB for current thread");
     check_mutex();
     apr_thread_mutex_lock(MrbThreadManager::mutex);
     apr_os_thread_t t = apr_os_thread_current();
@@ -134,16 +134,15 @@ public:
 
     for (int i = 0; i < mrb_thread_pairs.size(); i++) {
       if (apr_os_thread_equal(t, mrb_thread_pairs[i].thread)) {
-        LAMINA_LOG("Found existing MRB instance for current thread. #" << i);
+        // LAMINA_LOG("Found existing MRB instance for current thread. #" << i);
         mrb = mrb_thread_pairs[i].mrb;
       }
     }
 
     if (mrb == NULL) {
-      LAMINA_LOG("No MRB instance found for current thread, creating one");
+      // LAMINA_LOG("No MRB instance found for current thread, creating one");
       mrb_state* mrb = mrb_open();
       RClass* lamina_module = mrb_define_module(mrb, "Lamina");
-      mrb_funcall(mrb, mrb_obj_value(lamina_module), "init_default_options", 0);
       mrb_funcall(mrb, mrb_obj_value(lamina_module), "read_lamina_options", 0);
       this->set_mrb_for_thread_no_lock(mrb);
     }
@@ -227,7 +226,7 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
    apr_pool_destroy(pool);
    int exit_code = CefExecuteProcess(main_args, app.get(), sandbox_info);
    if (exit_code >= 0) {
-      LAMINA_LOG("Lamina.start_cef_proc: Subprocess exited");
+      // LAMINA_LOG("Lamina.start_cef_proc: Subprocess exited");
       // The sub-process has completed so return here.
       return mrb_nil_value();
    }
