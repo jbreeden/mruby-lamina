@@ -89,6 +89,9 @@ module Lamina
       read_lamina_options
       relaunch
     end
+  rescue Exception => ex
+    $stderr.puts "Exception: #{ex}"
+    $stderr.puts "Backtrace: #{ex.backtrace}"
   end
 
   # Configurable options

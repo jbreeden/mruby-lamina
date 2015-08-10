@@ -1,4 +1,4 @@
-require 'FileUtils'
+require 'fileutils'
 
 # Thanks! http://stackoverflow.com/questions/170956/how-can-i-find-which-operating-system-my-ruby-program-is-running-on
 module OS
@@ -34,21 +34,21 @@ MRuby::Gem::Specification.new('mruby-lamina') do |spec|
   spec.author  = 'Jared Breeden'
   spec.summary = 'A Chromium shell for mruby apps'
 
+  spec.cc.include_paths << ENV['CEF_HOME']
+  spec.cxx.include_paths << ENV['CEF_HOME']
   spec.build.cc.include_paths << "#{LaminaGem.dir}/include"
   spec.build.cxx.include_paths << "#{LaminaGem.dir}/include"
+  spec.cc.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
+  spec.cxx.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
   spec.cc.flags << [ '-std=c11' ]
   spec.cxx.flags << [ '-std=c++11' ]
 
   if OS.mac?
-    spec.cc.include_paths << ENV['CEF_HOME']
-    spec.cxx.include_paths << ENV['CEF_HOME']
-    spec.cc.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
-    spec.cxx.include_paths << "#{LaminaGem.dir}/../mruby-cef/include"
     spec.linker.flags << "-F#{ENV['CEF_HOME']}/Release"
     spec.linker.flags << "-framework \"Chromium Embedded Framework\""
     (spec.linker.flags_after_libraries = []) << "#{ENV['CEF_HOME']}/build/libcef_dll/Release/libcef_dll_wrapper.a"
   elsif OS.linux?
-    spec.linker.flags << '-Wl,-rpath,/opt/lamina/lib'
+    spec.linker.flags << '-Wl,-rpath,\'$ORIGIN\''
     spec.linker.libraries << 'X11'
   end
 end
