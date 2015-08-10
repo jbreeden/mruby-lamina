@@ -1,3 +1,9 @@
+/* TODO
+ * This file needs some *serious* love.
+ * It was once a scrappy little proof of concept...
+ * But it has become a horrible, incohesive, glob of garbage.
+ */
+
 /* System Includes */
 #if defined(_WIN32) || defined(_WIN64)
   #include <ws2tcpip.h>
@@ -34,8 +40,6 @@
 #include "LaminaHandler.h"
 #include "LaminaApp.h"
 #include "lamina_opt.h"
-// #include "BrowserMessageServer.h"
-// #include "BrowserMessageClient.h"
 
 using namespace std;
 
@@ -85,61 +89,93 @@ int XIOErrorHandlerImpl(Display *display) {
  * MRB Thread Instance Management
  *********************************/
 
-struct AprOsThreadComparator {
-    bool operator()(const apr_os_thread_t& a, const apr_os_thread_t& b) const {
-        return apr_os_thread_equal(a, b);
-    }
+class MrbThreadPair {
+public:
+  mrb_state * mrb;
+  apr_os_thread_t thread;
+
+  MrbThreadPair(apr_os_thread_t t, mrb_state* mrb) {
+    this->mrb = mrb;
+    this->thread = t;
+  }
 };
 
-static apr_thread_mutex_t* mrbs_mutex = NULL;
-std::map<apr_os_thread_t, mrb_state*, AprOsThreadComparator> thread_mrbs;
+class MrbThreadManager {
+public:
+  MrbThreadManager() {
+    this->mrb_thread_pairs = std::vector<MrbThreadPair>();
+  }
 
-mrb_state* mrb_for_thread() {
-   if (mrbs_mutex == NULL) {
-     apr_pool_t* mutex_pool;
-     apr_pool_create(&mutex_pool, NULL);
-     apr_thread_mutex_create(&mrbs_mutex, APR_THREAD_MUTEX_DEFAULT, mutex_pool);
-   }
+  void check_mutex() {
+    // LAMINA_LOG("MrbThreadManager: Making sure mutex exists");
+    if (MrbThreadManager::mutex == NULL) {
+      // LAMINA_LOG("MrbThreadManager: Mutex is NULL, creating it");
+      apr_pool_t* mutex_pool;
+      apr_pool_create(&mutex_pool, NULL);
+      apr_thread_mutex_create(&MrbThreadManager::mutex, APR_THREAD_MUTEX_DEFAULT, mutex_pool);
+    }
+    // LAMINA_LOG("MrbThreadManager: Mutex check done");
+  }
 
-   apr_os_thread_t os_thread = apr_os_thread_current();
-   LAMINA_LOG("mrb_for_thread: Fetching mruby instance for thread.");
-   apr_thread_mutex_lock(mrbs_mutex);
-   mrb_state* mrb;
-   try {
-      mrb = thread_mrbs.at(os_thread);
-      LAMINA_LOG("mrb_for_thread: Found existing mrb for this thread");
-   }
-   catch (out_of_range ex) {
-      LAMINA_LOG("mrb_for_thread: No mrb found for this thread, creating a new one.");
-      mrb = mrb_open();
+  void set_mrb_for_thread(mrb_state* mrb) {
+    LAMINA_LOG("MrbThreadManager: Setting MRB for current thread");
+    check_mutex();
+    apr_thread_mutex_lock(MrbThreadManager::mutex);
+    set_mrb_for_thread_no_lock(mrb);
+    apr_thread_mutex_unlock(MrbThreadManager::mutex);
+  }
+
+  mrb_state* get_mrb_for_thread() {
+    LAMINA_LOG("MrbThreadManager: Getting MRB for current thread");
+    check_mutex();
+    apr_thread_mutex_lock(MrbThreadManager::mutex);
+    apr_os_thread_t t = apr_os_thread_current();
+    mrb_state* mrb = NULL;
+
+    for (int i = 0; i < mrb_thread_pairs.size(); i++) {
+      if (apr_os_thread_equal(t, mrb_thread_pairs[i].thread)) {
+        LAMINA_LOG("Found existing MRB instance for current thread. #" << i);
+        mrb = mrb_thread_pairs[i].mrb;
+      }
+    }
+
+    if (mrb == NULL) {
+      LAMINA_LOG("No MRB instance found for current thread, creating one");
+      mrb_state* mrb = mrb_open();
       RClass* lamina_module = mrb_define_module(mrb, "Lamina");
       mrb_funcall(mrb, mrb_obj_value(lamina_module), "init_default_options", 0);
       mrb_funcall(mrb, mrb_obj_value(lamina_module), "read_lamina_options", 0);
-      if (mrb->exc)
-      {
-          printf( "EXCEPTION READING LAMINA OPTIONS! \n" );
-          printf("%s\n", mrb_str_to_cstr(mrb, mrb_obj_value(mrb->exc)));
-      }
-      thread_mrbs[os_thread] = mrb;
-   }
-   apr_thread_mutex_unlock(mrbs_mutex);
-   return mrb;
+      this->set_mrb_for_thread_no_lock(mrb);
+    }
+
+    apr_thread_mutex_unlock(MrbThreadManager::mutex);
+    return mrb;
+  }
+
+private:
+  void set_mrb_for_thread_no_lock(mrb_state* mrb) {
+    apr_os_thread_t t = apr_os_thread_current();
+    mrb_thread_pairs.push_back(MrbThreadPair(t, mrb));
+  }
+
+  std::vector<MrbThreadPair> mrb_thread_pairs;
+  static apr_thread_mutex_t* mutex;
+};
+
+apr_thread_mutex_t* MrbThreadManager::mutex = NULL;
+
+static MrbThreadManager mrb_thread_manager;
+
+mrb_state* mrb_for_thread() {
+   return mrb_thread_manager.get_mrb_for_thread();
 }
 
 // Only needs to be called for the first thread of the process
 // (Since it is launched as lamina.exe, and an mrb_state will already
 //  be available)
 void set_mrb_for_thread(mrb_state* mrb) {
-   if (mrbs_mutex == NULL) {
-     apr_pool_t* mutex_pool;
-     apr_pool_create(&mutex_pool, NULL);
-     apr_thread_mutex_create(&mrbs_mutex, APR_THREAD_MUTEX_DEFAULT, mutex_pool);
-   }
-   apr_thread_mutex_lock(mrbs_mutex);
-   apr_os_thread_t os_thread = apr_os_thread_current();
-   LAMINA_LOG("set_mrb_for_thread: Explicitly setting mruby instance for thread");
-   thread_mrbs[os_thread] = mrb;
-   apr_thread_mutex_unlock(mrbs_mutex);
+  // LAMINA_LOG("Explicitly setting MRB for thead (presumably the main thread).");
+  mrb_thread_manager.set_mrb_for_thread(mrb);
 }
 
 /*********************************
@@ -151,9 +187,7 @@ char** global_argv = NULL;
 
 mrb_value
 lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
-#ifdef DEBUG
-   cout << "New Main Process" << endl;
-#endif
+  // LAMINA_LOG("Lamina.start_cef_proc");
 
    void* sandbox_info = NULL;
 
@@ -170,30 +204,35 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #else
    CefMainArgs main_args(global_argc, global_argv);
 #endif
+
    // SimpleApp implements application-level callbacks. It will create the first
    // browser instance in OnContextInitialized() after CEF has initialized.
+  //  LAMINA_LOG("Lamina.start_cef_proc: Creating App");
    CefRefPtr<LaminaApp> app(new LaminaApp);
 
+  //  LAMINA_LOG("Lamina.start_cef_proc: Getting URL");
    app.get()->url = lamina_opt_app_url();
+  //  LAMINA_LOG("Lamina.start_cef_proc: Got URL");
 
    cout << "APP URL: " << app.get()->url << endl;
 
    // CEF applications have multiple sub-processes (render, plugin, GPU, etc)
    // that share the same executable. This function checks the command-line and,
    // if this is a sub-process, executes the appropriate logic.
-   LAMINA_LOG("Lamina.start: Executing CEF Process");
+
+  //  LAMINA_LOG("Lamina.start_cef_proc: Executing CEF Process");
    apr_pool_t* pool;
    apr_pool_create(&pool, NULL);
    apr_env_set("CEF_SUBPROC", "true", pool);
    apr_pool_destroy(pool);
    int exit_code = CefExecuteProcess(main_args, app.get(), sandbox_info);
    if (exit_code >= 0) {
-      LAMINA_LOG("Lamina.start: Subprocess exited");
+      LAMINA_LOG("Lamina.start_cef_proc: Subprocess exited");
       // The sub-process has completed so return here.
       return mrb_nil_value();
    }
 
-   LAMINA_LOG("Lamina.start: This is a CEF browser process");
+  //  LAMINA_LOG("Lamina.start_cef_proc: This is a CEF browser process");
 
    // Specify CEF global settings here.
    CefSettings settings;
@@ -202,16 +241,18 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
    //settings.log_severity = LOGSEVERITY_DISABLE;
 #endif
 
-   auto cache_path = lamina_opt_cache_path();
+  //  LAMINA_LOG("Lamina.start_cef_proc: Getting the cache path");
+   string cache_path = lamina_opt_cache_path();
+  //  LAMINA_LOG("Lamina.start_cef_proc: Got the cache path");
    if (cache_path.size() > 0) {
       CefString(&settings.cache_path).FromASCII(cache_path.c_str());
    }
 
+  //  LAMINA_LOG("Lamina.start_cef_proc: Getting the remote debugging port");
    int rdp = lamina_opt_remote_debugging_port();
    if (rdp != 0) {
       settings.remote_debugging_port = rdp;
    }
-
 
 #if !defined(CEF_USE_SANDBOX)
    settings.no_sandbox = true;
@@ -224,50 +265,21 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
   XSetIOErrorHandler(XIOErrorHandlerImpl);
 #endif
 
-   // Initialize CEF.
+  //  LAMINA_LOG("Lamina.start_cef_proc: Initializing CEF");
    CefInitialize(main_args, settings, app.get(), sandbox_info);
 
-   // Run the CEF message loop. This will block until CefQuitMessageLoop() is
-   // called.
+  //  LAMINA_LOG("Lamina.start_cef_proc: Running the message loop");
    CefRunMessageLoop();
 
-   // Shut down CEF.
+  //  LAMINA_LOG("Lamina.start_cef_proc: Shutting down CEF");
    CefShutdown();
 
    return mrb_nil_value();
 }
 
-mrb_value
-lamina_start_browser_message_server(mrb_state* mrb, mrb_value self) {
-   LAMINA_LOG("Lamina.start_browser_message_server (c ext): Starting browser message server");
-   // Create new, and do not destroy. Should be running as long as the process is running
-  //  auto browserMessageServer = new BrowserMessageServer();
-  //  browserMessageServer->set_url(lamina_opt_browser_ipc_path());
-  //  browserMessageServer->start();
-   return self;
-}
-
-// md-doc is already written in mrblib/lamina.rb (just to keep it all in one file)
-mrb_value
-lamina_open_new_window(mrb_state* mrb, mrb_value self) {
-  //  LAMINA_LOG("Lamina.open_new_window (c ext): Starting browser message client");
-  //  BrowserMessageClient client;
-  //  auto browser_ipc_path = lamina_opt_browser_ipc_path();
-  //  LAMINA_LOG("Lamina.open_new_window (c ext): Sending new_window message");
-  //  client.set_server_url(browser_ipc_path);
-  //  client.send("new_window");
-  //  // Sleep long enough for the message to be delivered
-  //  // just in case the app exists after this.
-  //  // (TODO: Should be a way to flush this without a sleep)
-  //  this_thread::sleep_for(chrono::seconds(1));
-   return self;
-}
-
 void mrb_mruby_lamina_gem_init(mrb_state* mrb) {
    auto lamina_module = mrb_define_module(mrb, "Lamina");
-   mrb_define_class_method(mrb, lamina_module, "start_browser_message_server", lamina_start_browser_message_server, MRB_ARGS_NONE());
    mrb_define_class_method(mrb, lamina_module, "start_cef_proc", lamina_start_cef_proc, MRB_ARGS_NONE());
-   mrb_define_class_method(mrb, lamina_module, "open_new_window", lamina_open_new_window, MRB_ARGS_NONE());
 }
 
 void mrb_mruby_lamina_gem_final(mrb_state* mrb) {}
@@ -277,22 +289,13 @@ void mrb_mruby_lamina_gem_final(mrb_state* mrb) {}
  *********************************/
 int lamina_main()
 {
+   apr_initialize();
    mrb_state* mrb = mrb_open();
    set_mrb_for_thread(mrb);
-
-   mrbc_context* context = mrbc_context_new(mrb);
-   context->filename = "lamina_main.rb";
-
-   FILE* startup_script = fopen("lamina_main.rb", "r");
-   if (startup_script != NULL) {
-      mrb_load_file_cxt(mrb, startup_script, context);
-      if (mrb->exc) {
-         LAMINA_LOG("!!! Error !!! " << mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_obj_value(mrb->exc), "to_s", 0)));
-      }
-      return 0;
-   }
-   else {
-      return 1;
+   RClass* lamina_module = mrb_define_module(mrb, "Lamina");
+   mrb_funcall(mrb, mrb_obj_value(lamina_module), "main", 0);
+   if (mrb->exc) {
+      LAMINA_LOG("!!! Error !!! " << mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_obj_value(mrb->exc), "to_s", 0)));
    }
 }
 

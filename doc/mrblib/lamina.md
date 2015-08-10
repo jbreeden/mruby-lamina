@@ -1,11 +1,5 @@
 # Module Lamina
 
-## `attr_accessor :browser_ipc_path`
-- Get or set the `browser_ipc_path` (must be a string).
-- This tells lamina threads/processes how to communicate with the main browser thread.
-- If you don't know why you'd want to set this, don't worry about it.
-- Default value: A radomly generated url (that you should probably just leave alone).
-
 ## `attr_accessor :cache_path`
 - Get or set the `cache_path` option.
 - This tells lamina where to store cache data from the browser,
@@ -79,4 +73,3 @@
 - Should only be called in the `on_relaunch` block.
 - Opens a new window for the application.
 - Same as running `window.open('/');` in the existing browser window.
-
