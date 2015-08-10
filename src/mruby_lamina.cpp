@@ -287,7 +287,8 @@ int lamina_main()
    if (startup_script != NULL) {
       mrb_load_file_cxt(mrb, startup_script, context);
       if (mrb->exc) {
-         LAMINA_LOG("!!! Error !!! " << mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_obj_value(mrb->exc), "to_s", 0)));
+         mrb_value exc_object = mrb_obj_value(mrb->exc);
+         LAMINA_LOG("!!! Error !!! " << mrb_string_value_cstr(mrb, &exc_object));
       }
       return 0;
    }

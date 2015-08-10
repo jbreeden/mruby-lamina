@@ -97,11 +97,15 @@ module Lamina
     @browser_ipc_path = "ipc://#{ipc_prefix}#{(1..20).map { |i| ('a'.ord + rand(25)).chr }.join}_browser.ipc"
     @cache_path = nil
     @server_port = nil
-    @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
-      f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
-    }.map { |f|
-      "/opt/lamina/js_extensions/#{f}"
-    }
+    if Dir.exists?('/opt/lamina/js_extensions')
+      @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
+        f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
+      }.map { |f|
+        "/opt/lamina/js_extensions/#{f}"
+      }
+    else
+      @js_extensions = []
+    end
     @remote_debugging_port = 0
     @url = nil
     @use_page_titles = false
@@ -127,6 +131,9 @@ module Lamina
       read_lamina_options
       relaunch
     end
+  rescue Exception => ex
+    $stderr.puts "Exception: #{ex}"
+    $stderr.puts "Backtrace: #{ex.backtrace}"
   end
 
   def self.ensure_lock_file_exists
