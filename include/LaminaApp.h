@@ -10,17 +10,15 @@ public:
    LaminaApp();
 
    // CefApp methods:
-   virtual CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() OVERRIDE 
-   { 
-      return this; 
+   virtual CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() OVERRIDE
+   {
+      return this;
    }
 
    virtual CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() OVERRIDE;
 
    // CefBrowserProcessHandler methods:
    virtual void OnContextInitialized() OVERRIDE;
-
-   std::string url;
 
 private:
    // Include the default reference counting implementation.

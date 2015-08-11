@@ -4,29 +4,6 @@
 module Lamina
   class << self
     #<
-    # ## `attr_accessor :cache_path`
-    # - Get or set the `cache_path` option.
-    # - This tells lamina where to store cache data from the browser,
-    #   such as localstorage and the like.
-    # - If the specified path does not exists, lamina will create the directory.
-    # - The parent of the indicated path must exist already.
-    # - Default value: `nil` (No cache data will be saved)
-    #>
-    attr_accessor :cache_path
-
-    #<
-    # ## `attr_accessor :remote_debugging_port`
-    # - Get or set the `remote_debugging_port` option (must be an int).
-    # - This tells lamina what port (if any) to open for remote debugging
-    #   via chrome dev tools.
-    # - If specified, after launching the application you can navigate to
-    #   `http://localhost:#{remote_debugging_port}` in a chrome window to
-    #   access chrom dev tools for you app, inspect the html, and run javascript.
-    # - Default value: `0` (disable remote debugging)
-    #>
-    attr_accessor :remote_debugging_port
-
-    #<
     # ## `attr_accessor :v8_extensions`
     # - Get or set the `v8_extensions` array (must be an array of file paths)
     # - This tells lamina what files to load when a new V8 context is created.
@@ -36,47 +13,10 @@ module Lamina
     # - Default value: Array with all file names ending in '.rb' from `/opt/lamina/js_extensions/` directory
     #>
     attr_accessor :js_extensions
-
-    #<
-    # ## `attr_accessor :url`
-    # - Get or set the `url` option (must be a string)
-    # - This tells lamina what url to load on app launch
-    # - Accepts `file://`, `http://`, and `https://` urls
-    # - Default value: `nil` (This is required however, you _must_ overwrite the default)
-    #>
-    attr_accessor :url
-
-    #<
-    # ## `attr_accessor :use_page_titles`
-    # - Get or set the `use_page_titles` option (boolean)
-    # - This tells lamina whether to update the title bar with the page title specified in
-    #   any loaded page.
-    # - Default value: `false` (The `window_title` option will be used for the liftime of the app)
-    #>
-    attr_accessor :use_page_titles
-
-    #<
-    # ## `attr_accessor :window_title`
-    # - Get or set the `window_title` option (must be a string)
-    # - This tells lamina what text to display in the application's title bar
-    # - Default value: `Lamina`
-    #>
-    attr_accessor :window_title
   end
 
   def self.main
-    if File.exists?("./lamina_main.rb")
-      $stdout.puts "Loading lamina_main.rb"
-      load "./lamina_main.rb"
-    elsif File.exists?("./index.html")
-      $stdout.puts "Loading index.html"
-      self.url = "file://#{Dir.pwd}/index.html"
-      self.run
-    else
-      $stdout.puts "No lamina_main.rb or index.html found. Opening directory."
-      self.url = "file://#{Dir.pwd}"
-      self.run
-    end
+    self.run
   end
 
   def self.run
@@ -86,10 +26,8 @@ module Lamina
     when :launching
       launch
     when :cef_process
-      read_lamina_options
       start_cef_proc
     when :relaunching
-      read_lamina_options
       relaunch
     end
   rescue Exception => ex
@@ -152,109 +90,24 @@ module Lamina
       puts "Lamina.launch: Running on_launch callback"
       @on_launch_proc[]
     end
-    puts "Lamina.launch: Writing options to #{@options_file_path}"
-    File.open(@options_file_path, 'w') do |opt_file|
-      print_options(opt_file)
-    end
     puts "Lamina.launch: Validating options"
     validate_options
-    puts "Lamina.launch: Launching options:"
-    print_options($stdout, '  ')
-
     puts "Lamina.launch: Starting CEF"
     start_cef_proc
   end
 
-  #<
-  # ## `::on_relaunch(&block)`
-  # - Provide a block to lamina specifying relaunch behavior.
-  # - The provided block is only called when the app is started, but an instance
-  #   is already running.
-  # - The lamina options (such as `url`, `window_title`, etc.) set for the running
-  #   application instance are re-used automatically
-  #>
-  def self.on_relaunch(&block)
-    @on_relaunch_block = block
-  end
-
-  #<
-  # ## `::open_new_window`
-  # - Should only be called in the `on_relaunch` block.
-  # - Opens a new window for the application.
-  # - Same as running `window.open('/');` in the existing browser window.
-  #>
-  # (This method is defined in mruby_lamina.cpp, but documented here to keep docs in one file)
-
-  def self.relaunch
-    File.open(@options_file_path, 'r') do |f|
-      puts "Lamina.relaunch: Relaunching lamina with options:"
-      print_options($stdout, '  ')
-      @on_relaunch_block[] if @on_relaunch_block
-    end
-  end
-
-  def self.read_lamina_options
-    return unless File.exists?(@options_file_path)
-    File.open(@options_file_path, 'r') do |f|
-      puts "Lamina.read_lamina_options: Reading options from #{@options_file_path}"
-      eval f.read
-    end
-  end
-
-  def self.print_options(file, indent = '')
-    file.puts "#{indent}Lamina.cache_path = #{ @cache_path ? "'#{@cache_path}'" : 'nil' }"
-    file.puts "#{indent}Lamina.remote_debugging_port = #{@remote_debugging_port || 'nil' }"
-    file.puts "#{indent}Lamina.js_extensions = #{ @js_extensions ? "#{@js_extensions}" : 'nil' }"
-    file.puts "#{indent}Lamina.url = #{ @url ? "'#{@url}'" : 'nil' }"
-    file.puts "#{indent}Lamina.use_page_titles = #{@use_page_titles || 'false' }"
-    file.puts "#{indent}Lamina.window_title = #{ @window_title ? "'#{@window_title}'" : 'nil' }"
-  end
-
   def self.validate_options
-    unless @cache_path.nil? || Dir.exists?(@cache_path)
-      begin
-        Dir.mkdir @cache_path
-      rescue Exception => ex
-        puts "!!! ERROR !!! Lamina.cache_path (#{@cache_path}), directory does not exist and could not be created."
-        puts ex
-        exit 1
-      end
-    end
-
     @js_extensions.each do |f|
       unless File.exists? f
         puts "!!! ERROR !!! Lamina.js_extensions entry #{f} does not exist"
         exit 1
       end
     end
-
-    unless @remote_debugging_port.nil? || @remote_debugging_port.kind_of?(Fixnum)
-      puts "!!! ERROR !!! If Lamina.remoute_debugging_port is specified, it must be an int"
-      exit 1
-    end
-
-    unless @url =~ %r[(https?|file)://.*]
-      puts "!!! ERROR !!! Lamina.url must be a string matching %r[(https?|file)://.*]"
-      exit 1
-    end
-
-    # @use_page_titles can be anything, if the user doesn't set nil
-    # or false it will evaluate as true... no biggy, so no validation
-
-    unless @window_title.nil? || @window_title.kind_of?(String)
-      puts "!!! ERROR !!! If Lamina.window_title is specified, it must be a string"
-      exit 1
-    end
   end
 
   # Configure Defaults on load
   # --------------------------
 
-  if Dir.exists?('./lamina_cache')
-    @cache_path = './lamina_cache'
-  else
-    @cache_path = nil
-  end
   if Dir.exists?('/opt/lamina/js_extensions')
     @js_extensions = Dir.entries('/opt/lamina/js_extensions').reject { |f|
       f =~ /^\.\.?$/ || !File.file?("/opt/lamina/js_extensions/#{f}")
@@ -264,10 +117,6 @@ module Lamina
   else
     @js_extensions = []
   end
-  @remote_debugging_port = 9999
-  @url = "file://#{Dir.pwd}/index.html"
-  @use_page_titles = false
-  @window_title = "Lamina"
 
   # Internal-only variables
   @lock_file_path = ".lamina"

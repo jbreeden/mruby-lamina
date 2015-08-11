@@ -49,6 +49,10 @@ extern "C" {
 
 using namespace std;
 
+int g_argc = 0;
+char** g_argv = NULL;
+CefRefPtr<CefCommandLine> g_command_line;
+
 // Notes on sandboxing:
 //  - On windows, this currently only works if the sub-process exe is the same exe as the main process
 //  - With sandboxing enabled, render processes cannot access system resources like networking/files
@@ -142,8 +146,6 @@ public:
     if (mrb == NULL) {
       // LAMINA_LOG("No MRB instance found for current thread, creating one");
       mrb_state* mrb = mrb_open();
-      RClass* lamina_module = mrb_define_module(mrb, "Lamina");
-      mrb_funcall(mrb, mrb_obj_value(lamina_module), "read_lamina_options", 0);
       this->set_mrb_for_thread_no_lock(mrb);
     }
 
@@ -181,9 +183,6 @@ void set_mrb_for_thread(mrb_state* mrb) {
  * Lamina Ruby Module Functions
  *********************************/
 
-int global_argc = 0;
-char** global_argv = NULL;
-
 mrb_value
 lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
   // LAMINA_LOG("Lamina.start_cef_proc");
@@ -201,19 +200,13 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #ifdef WINDOWS
    CefMainArgs main_args;
 #else
-   CefMainArgs main_args(global_argc, global_argv);
+   CefMainArgs main_args(g_argc, g_argv);
 #endif
 
    // SimpleApp implements application-level callbacks. It will create the first
    // browser instance in OnContextInitialized() after CEF has initialized.
   //  LAMINA_LOG("Lamina.start_cef_proc: Creating App");
    CefRefPtr<LaminaApp> app(new LaminaApp);
-
-  //  LAMINA_LOG("Lamina.start_cef_proc: Getting URL");
-   app.get()->url = lamina_opt_app_url();
-  //  LAMINA_LOG("Lamina.start_cef_proc: Got URL");
-
-   cout << "APP URL: " << app.get()->url << endl;
 
    // CEF applications have multiple sub-processes (render, plugin, GPU, etc)
    // that share the same executable. This function checks the command-line and,
@@ -241,16 +234,12 @@ lamina_start_cef_proc(mrb_state* mrb, mrb_value self) {
 #endif
 
   //  LAMINA_LOG("Lamina.start_cef_proc: Getting the cache path");
-   string cache_path = lamina_opt_cache_path();
-  //  LAMINA_LOG("Lamina.start_cef_proc: Got the cache path");
-   if (cache_path.size() > 0) {
-      CefString(&settings.cache_path).FromASCII(cache_path.c_str());
-   }
-
-  //  LAMINA_LOG("Lamina.start_cef_proc: Getting the remote debugging port");
-   int rdp = lamina_opt_remote_debugging_port();
-   if (rdp != 0) {
-      settings.remote_debugging_port = rdp;
+  //  string cache_path = lamina_opt_cache_path();
+  //  if (cache_path.size() > 0) {
+  //     CefString(&settings.cache_path).FromASCII(cache_path.c_str());
+  //  }
+   if (g_command_line->HasSwitch("cache-path")) {
+      CefString(&settings.cache_path) = g_command_line->GetSwitchValue("cache-path");
    }
 
 #if !defined(CEF_USE_SANDBOX)

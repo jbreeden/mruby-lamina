@@ -24,21 +24,6 @@ using namespace std;
 extern "C" {
 #endif
 
-string
-lamina_opt_window_title() {
-   GET_LAMINA_OPTIONS_IV("@window_title");
-   if (mrb_nil_p(var)) {
-      return "";
-   }
-   return mrb_str_to_cstr(mrb, var);
-}
-
-bool
-lamina_opt_use_page_titles() {
-   GET_LAMINA_OPTIONS_IV("@use_page_titles");
-   return mrb_bool(var);
-}
-
 char**
 lamina_opt_js_extensions() {
    GET_LAMINA_OPTIONS_IV("@js_extensions");
@@ -50,46 +35,6 @@ lamina_opt_js_extensions() {
    }
    files[i] = NULL;
    return files;
-}
-
-int
-lamina_opt_remote_debugging_port() {
-   GET_LAMINA_OPTIONS_IV("@remote_debugging_port");
-   if (mrb_nil_p(var)) {
-      return 0;
-   }
-   return mrb_int(mrb, var);
-}
-
-string
-lamina_opt_lock_file() {
-   GET_LAMINA_OPTIONS_IV("@lock_file");
-   if (mrb_nil_p(var)) {
-      return "";
-   }
-   return mrb_str_to_cstr(mrb, var);
-}
-
-string
-lamina_opt_cache_path() {
-   LAMINA_LOG("lamina_opt_cache_path")
-   GET_LAMINA_OPTIONS_IV("@cache_path");
-   if (mrb_nil_p(var)) {
-      LAMINA_LOG("Cache path was nil");
-      return "";
-   }
-   char* val = mrb_str_to_cstr(mrb, var);
-   LAMINA_LOG("Cache path was: " << val);
-   return val;
-}
-
-string
-lamina_opt_app_url() {
-   GET_LAMINA_OPTIONS_IV("@url");
-   if (mrb_nil_p(var)) {
-      return "";
-   }
-   return mrb_str_to_cstr(mrb, var);
 }
 
 #ifdef __cplusplus

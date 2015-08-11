@@ -2,6 +2,7 @@
 #define LAMINA_H
 #include <map>
 #include "mruby.h"
+#include "include/cef_command_line.h"
 
 #if defined(_WIN32) || defined(_WIN64)
    #define WINDOWS
@@ -25,6 +26,10 @@ mrb_value lamina_start(mrb_state* mrb, mrb_value self);
 void mrb_mruby_lamina_gem_init(mrb_state* mrb);
 void mrb_mruby_lamina_gem_final(mrb_state* mrb);
 int lamina_main();
+
+extern int g_argc;
+extern char** g_argv;
+extern CefRefPtr<CefCommandLine> g_command_line;
 
 #ifdef __cplusplus
 }
